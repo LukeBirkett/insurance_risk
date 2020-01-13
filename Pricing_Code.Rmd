@@ -1,0 +1,787 @@
+---
+title: "Pricing Mock"
+output: html_notebook
+---
+
+```{r Libraries and Data }
+
+library(CASdatasets)
+library(dplyr)
+library(tidyverse)
+library(ggplot2)
+library(corrplot)
+library(purrr)
+library(ggridges)
+library(ggbeeswarm)
+library(caret)
+library(ranger)
+
+data(ausprivauto0405)
+data <- ausprivauto0405
+remove(ausprivauto0405)
+
+```
+
+```{r Descriptive Statistics }
+
+head(data)
+str(data)
+data$ClaimOcc <- factor(data$ClaimOcc)
+
+summary(data)
+
+var(data$Exposure)
+var(data$VehValue)
+var(data$ClaimNb)
+var(data$ClaimAmount)
+var(data$ClaimOcc)
+
+sd(data$Exposure)
+sd(data$VehValue)
+sd(data$ClaimNb)
+sd(data$ClaimAmount)
+sd(data$ClaimOcc)
+
+sum(data$Exposure)
+sum(data$VehValue)
+sum(data$ClaimNb)
+sum(data$ClaimAmount)
+sum(data$ClaimOcc)
+
+sum(is.na(data))                     # 0 nulls
+sum(data$ClaimAmount)                # 9,314,604 total claim amount
+count(data)                          # 67,856 observations 
+sum(data$ClaimAmount)/count(data)    # 137 average claim
+length(which(data$ClaimAmount == 0)) # 63,232 non-claims
+length(which(data$ClaimAmount > 0))  # 4624 claims
+
+
+```
+
+
+
+```{r Continuous:   Exposure   [ClaimAmount]   Exploratory Analysis }
+
+summary(data$Exposure)
+
+#DiSTRIBUTION OF POLICY LENGTH
+ggplot(subset(data, Exposure > 0)) +
+  geom_histogram(aes(Exposure), bins = 182, colour = "lightblue", fill = "lightblue")
+
+#DITCH POLICY LENGTH
+data = data %>%
+  mutate(policyCuts=cut(Exposure, 
+                       breaks= seq(0, 1, 0.10),
+                       labels=c("0.0-0.1","0.1-0.2","0.2-0.3","0.3-0.4","0.4-0.5",
+                                "0.5-0.6","0.6-0.7","0.7-0.8","0.8-0.9","0.9-1.0")))
+
+#DISTRIBUTION OF BUCKETED VARIABLE
+summary(data$policyCuts)
+
+#BOX PLOT FOR CATEGORIZED POLICY LENGTHS
+ggplot(subset(data, ClaimAmount > 0),
+       aes(policyCuts, log(ClaimAmount), colour = policyCuts)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) + 
+  geom_jitter(alpha = 0.075, width = 0.3)
+
+  
+#boxplot statistics
+#box.stat_exposure <- ggplot_build(box_exposure)$data[[1]]
+
+```
+
+```{r Continuous:   Exposure   [ClaimOcc]      Exploratory Analysis }
+str(data)
+
+#STACKED PLOT OF BUCKETS
+ggplot(data, 
+       aes(x = policyCuts,fill = ClaimOcc))+
+  geom_bar(position = "stack")
+
+#HISTOGRAM OF CONTINOUS VARIABLE [USE TO SEE IF RESULTS CHANGE WITH BUCKETS]
+ggplot(subset(data, Exposure > 0), aes(x=Exposure, fill = ClaimOcc)) +
+  geom_histogram(bins=182)
+
+
+#BOX PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(subset(data, VehValue > 0),aes(ClaimOcc, Exposure, colour = ClaimOcc)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0)
+
+#BOX PLOT STATISTICS
+#box.stat_exposure <- ggplot_build(box_exposure)$data[[1]]
+
+```
+
+
+
+```{r Continuous:   VehValue   [ClaimAmount]   Exploratory Analysis }
+
+summary(data$VehValue)
+
+#DiSTRIBUTION OF POLICY LENGTH
+ggplot(subset(data, VehValue > 0)) +
+  geom_histogram(aes(VehValue), bins = 182, colour = "lightblue", fill = "lightblue")
+
+ggplot(subset(data, VehValue > 0)) +
+  geom_histogram(aes(log(VehValue)), bins = 182, colour = "lightblue", fill = "lightblue")
+
+#DITCH POLICY LENGTH
+data = data %>%
+  mutate(valueCuts=cut(VehValue, 
+                       breaks= c(-0.5,0.5,1.0,1.5,2.0,2.5,3.0,3.5,4.0,4.5,5.0,5.5,6.0,35.0),
+                       labels= c("0.0-0.5","0.5-1.0","1.0-1.5","1.5-2.0","2.0-2.5","2.5-3.0",
+                                 "3.0-3.5","3.5-4.0","4.0-4.5","4.5-5.0","5.0-5.5","5.5-6.0",
+                                 "6.0-35.0")))
+
+#DISTRIBUTION OF BUCKETED VARIABLE
+summary(data$valueCuts)
+
+#BOX PLOT FOR CATEGORIZED POLICY LENGTHS
+ggplot(subset(data, ClaimAmount > 0),
+       aes(valueCuts, log(ClaimAmount), colour = valueCuts)) +
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) + 
+  geom_jitter(alpha = 0.075, width = 0.3)
+
+  
+#boxplot statistics
+#box.stat_exposure <- ggplot_build(box_exposure)$data[[1]]
+
+```
+
+```{r Continuous:   VehValue   [ClaimOcc]      Exploratory Analysis }
+
+summary(data$VehValue)
+
+#DISTRIBUTION OF CLAIM VS NON-CLAIM
+ggplot(subset(data, VehValue > 0), aes(x=VehValue, fill = ClaimOcc)) +
+  geom_histogram(bins=210)
+
+ggplot(subset(data, VehValue > 0), aes(x=log(VehValue), fill = ClaimOcc)) +
+  geom_histogram(bins=210)
+
+#BOX PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(subset(data, VehValue > 0),aes(ClaimOcc, log(VehValue), colour = ClaimOcc)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0)
+
+#JITTER PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(data, 
+       aes(x = VehValue,
+           y = ClaimOcc,
+           colour = ClaimOcc)) +
+  geom_jitter(alpha = 0.3, shape = 1)
+
+
+#BOX PLOT STATISTICS
+#box.stat_value <- ggplot_build(box_value)$data[[1]]
+
+
+```
+
+
+
+```{r Discrete:     VehAge     [ClaimAmount]      Exploratory Analysis }
+
+summary(data$VehAge)
+
+#BOX PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(subset(data, ClaimAmount > 0),aes(VehAge, log(ClaimAmount), colour = VehAge)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0)
+
+#JITTER PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(data, 
+       aes(x = ClaimAmount,
+           y = VehAge,
+           colour = VehAge)) +
+  geom_jitter(alpha = 0.3, shape = 1)
+
+
+#BOX PLOT STATISTICS
+#box.stat_value <- ggplot_build(box_value)$data[[1]]
+
+```
+
+```{r Discrete:     VehAge     [ClaimOcc]      Exploratory Analysis }
+
+summary(data$VehAge)
+
+#COUNT: STACKED BAR
+tempData <- data %>%
+  group_by(VehAge, ClaimOcc) %>%
+  summarize(count = n())
+
+
+ggplot(tempData, 
+       aes(x = VehAge, y = count, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "stack") +
+  geom_text(aes(label = count), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Count", 
+       fill = "Claim Occurance",
+       x = "Vehicle Age",
+       title = "blank")
+
+
+
+#PROPORTIONAL: STACKED BAR
+tempData <- data %>%
+  group_by(VehAge, ClaimOcc) %>%
+  summarize(count = n()) %>% 
+  mutate(percent = count/sum(count),
+         label = scales::percent(percent))
+
+
+ggplot(tempData, 
+       aes(x = VehAge, y = percent, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "fill") +
+  geom_text(aes(label = label), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Percentage", 
+       fill = "Claim Occurance",
+       x = "Vehicle Age",
+       title = "blank")
+
+```
+
+
+
+```{r Discrete:     VehBody     [ClaimAmount]      Exploratory Analysis }
+
+summary(data$VehBody)
+
+#BOX PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(subset(data, ClaimAmount > 0),aes(VehBody, log(ClaimAmount), colour = VehBody)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0)
+
+#JITTER PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(data, 
+       aes(x = ClaimAmount,
+           y = VehBody,
+           colour = VehBody)) +
+  geom_jitter(alpha = 0.3, shape = 1)
+
+
+#BOX PLOT STATISTICS
+#box.stat_value <- ggplot_build(box_value)$data[[1]]
+
+```
+
+```{r Discrete:     VehBody     [ClaimOcc]      Exploratory Analysis }
+
+summary(data$VehBody)
+
+#COUNT: STACKED BAR
+tempData <- data %>%
+  group_by(VehBody, ClaimOcc) %>%
+  summarize(count = n())
+
+
+ggplot(tempData, 
+       aes(x = VehBody, y = count, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "stack") +
+  geom_text(aes(label = count), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Count", 
+       fill = "Claim Occurance",
+       x = "Vehicle Type",
+       title = "blank")
+
+
+
+#PROPORTIONAL: STACKED BAR
+tempData <- data %>%
+  group_by(VehBody, ClaimOcc) %>%
+  summarize(count = n()) %>% 
+  mutate(percent = count/sum(count),
+         label = scales::percent(percent))
+
+
+ggplot(tempData, 
+       aes(x = VehBody, y = percent, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "fill") +
+  geom_text(aes(label = label), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Percentage", 
+       fill = "Claim Occurance",
+       x = "Vehicle Type",
+       title = "blank")
+
+
+```
+
+
+
+```{r Discrete:     DrivAge     [ClaimAmount]      Exploratory Analysis }
+
+summary(data$DrivAge)
+
+#BOX PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(subset(data, ClaimAmount > 0),aes(DrivAge, log(ClaimAmount), colour = DrivAge)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0)
+
+#JITTER PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(data, 
+       aes(x = ClaimAmount,
+           y = DrivAge,
+           colour = DrivAge)) +
+  geom_jitter(alpha = 0.3, shape = 1)
+
+
+#BOX PLOT STATISTICS
+#box.stat_value <- ggplot_build(box_value)$data[[1]]
+
+```
+
+```{r Discrete:     DrivAge     [ClaimOcc]      Exploratory Analysis }
+
+summary(data$DrivAge)
+
+#COUNT: STACKED BAR
+tempData <- data %>%
+  group_by(DrivAge, ClaimOcc) %>%
+  summarize(count = n())
+
+
+ggplot(tempData, 
+       aes(x = DrivAge, y = count, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "stack") +
+  geom_text(aes(label = count), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Count", 
+       fill = "Claim Occurance",
+       x = "Driver Age",
+       title = "blank")
+
+
+
+#PROPORTIONAL: STACKED BAR
+tempData <- data %>%
+  group_by(DrivAge, ClaimOcc) %>%
+  summarize(count = n()) %>% 
+  mutate(percent = count/sum(count),
+         label = scales::percent(percent))
+
+
+ggplot(tempData, 
+       aes(x = DrivAge, y = percent, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "fill") +
+  geom_text(aes(label = label), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Percentage", 
+       fill = "Claim Occurance",
+       x = "Driver Age",
+       title = "blank")
+
+```
+
+
+
+```{r Discrete:     Gender     [ClaimAmount]      Exploratory Analysis }
+summary(data$Gender)
+
+#BOX PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(subset(data, ClaimAmount > 0),aes(Gender, log(ClaimAmount), colour = Gender)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0)
+
+#JITTER PLOT: DISTRIBUTION COMPARISION FOR CLAIM VS NO CLAIM
+ggplot(data, 
+       aes(x = ClaimAmount,
+           y = Gender,
+           colour = Gender)) +
+  geom_jitter(alpha = 0.3, shape = 1)
+
+
+
+```
+
+```{rr Discrete:     Gender     [ClaimOcc]      Exploratory Analysis }
+summary(data$Gender)
+
+#COUNT: STACKED BAR
+tempData <- data %>%
+  group_by(Gender, ClaimOcc) %>%
+  summarize(count = n())
+
+
+ggplot(tempData, 
+       aes(x = Gender, y = count, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "stack") +
+  geom_text(aes(label = count), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Count", 
+       fill = "Claim Occurance",
+       x = "Gender",
+       title = "blank")
+
+
+
+#PROPORTIONAL: STACKED BAR
+tempData <- data %>%
+  group_by(Gender, ClaimOcc) %>%
+  summarize(count = n()) %>% 
+  mutate(percent = count/sum(count),
+         label = scales::percent(percent))
+
+
+ggplot(tempData, 
+       aes(x = Gender, y = percent, fill = ClaimOcc)) + 
+  geom_bar(stat = "identity",position = "fill") +
+  geom_text(aes(label = label), 
+            size = 3, 
+            position = position_stack(vjust = 0.5)) +
+  labs(y = "Percentage", 
+       fill = "Claim Occurance",
+       x = "Gender",
+       title = "blank")
+
+```
+
+
+
+```{r Probabilitstic Modelling: Random Forest - Parameter Tuning}
+
+str(data$ClaimOcc)
+
+data$ClaimOcc.numerical <- as.numeric(data$ClaimOcc)
+
+str(data$ClaimOcc.numerical)
+
+#BASELINE OCCURANCE GIVEN BY NAIVE CLAIM OCCURANCE
+data = data %>%
+  mutate(baseline = as.numeric(count(subset(data, ClaimOcc == 1))) / as.numeric(count(data)))
+
+set.seed(123)
+trainIndex <- createDataPartition(data$ClaimOcc, p = .70, list = FALSE)
+
+set.seed(123)
+train_set <- data[ trainIndex,]
+test_set  <- data[-trainIndex,]
+
+
+hyper_grid <- expand.grid(
+  mtry                = seq(2,6,1),              #mtry
+  node_size           = seq(50,1000,100),         #min.node.size #change to 150
+  sampe_size          = c(1),                    #sample.fraction (0.632)
+  
+  OOB_MSE             = 0,
+  
+  model_MSE.test      = 0,
+  base_MSE.test       = 0,
+  
+  model_MSE.train     = 0,
+  base_MSE.train      = 0,
+  
+  model.diff          = 0,
+  base.diff           = 0,
+  
+  actual.test         = 0,
+  model_pred.test     = 0,
+  base_pred.test      = 0, 
+  
+  actual.train        = 0,
+  model_pred.train    = 0,
+  base_pred.train     = 0)
+
+
+
+
+nrow(hyper_grid)
+
+
+
+
+system.time(
+  for(i in 1:nrow(hyper_grid)) {
+    if(i %% 5==0) {
+      print(i)     }
+    
+    # train model
+    set.seed(123)
+    model <- ranger(
+      formula         = ClaimOcc ~ Exposure VehValue VehAge VehBody Gender DrivAge, 
+      data            = train_set, 
+      num.trees       = 200,
+      mtry            = hyper_grid$mtry[i],
+      min.node.size   = hyper_grid$node_size[i],
+      sample.fraction = hyper_grid$sampe_size[i],
+      seed            = 123,
+      verbose         = T,
+      probability     = T,
+      splitrule       = "gini",
+      importance      = "impurity"
+      )
+    
+    test_temp  = test_set
+    train_temp = train_set
+    
+    #OOB MSE
+    hyper_grid$OOB_MSE[i] <- model$prediction.error
+    
+    
+    #MODEL TEST MSE
+    test_temp$pred <- predict(model, test_temp)[["predictions"]][,2]
+    test_MSE = sum(((test_temp$pred - test_temp$ClaimOcc.numerical)^2))/nrow(test_temp)
+    hyper_grid$model_MSE.test[i] <- test_MSE
+    
+    #BASELINE TEST MSE
+    base.test_MSE = sum(((test_temp$baseline - test_temp$ClaimOcc.numerical)^2))/nrow(test_temp)
+    hyper_grid$base_MSE.test[i] <- base.test_MSE
+    
+    
+    #MODEL TRAIN MSE
+    train_temp$pred <- predict(model, train_temp)[["predictions"]][,2]
+    train_MSE = sum(((train_temp$pred - train_temp$ClaimOcc.numerical)^2))/nrow(train_temp)
+    hyper_grid$model_MSE.train[i] <- train_MSE
+    
+    #BASELINE TRAIN MSE
+    base.train_MSE = sum(((train_temp$baseline - train_temp$ClaimOcc.numerical)^2))/nrow(train_temp)
+    hyper_grid$base_MSE.train[i] <- base.train_MSE
+    
+    
+    #DIFFERENCE IN MODEL
+    hyper_grid$model.diff[i] <- sqrt((test_MSE - train_MSE)^2)
+
+        
+    #remove(test_temp)
+    #remove(train_temp)
+    remove(base.test_MSE)
+    remove(base.train_MSE)
+    remove(i)
+    remove(test_MSE)
+    remove(train_MSE)
+    
+  })
+
+
+grid.para_search = hyper_grid #mtry=seq(1,10,1),node_size=seq(750,10,-10),sampe_size=c(1)
+
+remove(hyper_grid)
+remove(test_set)
+remove(train_set)
+remove(trainIndex)
+remove(model)
+
+
+
+
+
+
+
+```
+
+```{r Probabilitstic Modelling: Random Forest - nTree Tuning }
+
+str(data$ClaimOcc)
+
+data$ClaimOcc.numerical <- as.numeric(data$ClaimOcc) -1 
+
+str(data$ClaimOcc.numerical)
+
+#BASELINE OCCURANCE GIVEN BY NAIVE CLAIM OCCURANCE
+data = data %>%
+  mutate(baseline = as.numeric(count(subset(data, ClaimOcc == 1))) / as.numeric(count(data)))
+
+set.seed(123)
+trainIndex <- createDataPartition(data$ClaimOcc, p = .70, list = FALSE)
+
+set.seed(123)
+train_set <- data[ trainIndex,]
+test_set  <- data[-trainIndex,]
+
+table(train_set$ClaimOcc)
+table(test_set$ClaimOcc)
+
+
+hyper_grid <- expand.grid(
+  #mtry                = c(2),              #mtry
+  #node_size           = c(750),         #min.node.size #change to 150
+  #sampe_size          = c(1),                    #sample.fraction (0.632)
+  nTrees              = c(10,25,50,75,100,200,300,400,500,600,700,800,900,1000,1500,2000,200,3000,3500),
+  
+  OOB_MSE             = 0,
+  
+  model_MSE.test      = 0,
+  base_MSE.test       = 0,
+  
+  model_MSE.train     = 0,
+  base_MSE.train      = 0,
+  
+  model.diff          = 0)
+
+nrow(hyper_grid)
+
+
+system.time(
+  for(i in 1:nrow(hyper_grid)) {
+    if(i %% 5==0) {
+      print(i)     }
+    
+    # train model
+    set.seed(123)
+    model <- ranger(
+      formula         = ClaimOcc ~ . -ClaimNb -ClaimAmount -policyCuts -valueCuts -baseline -ClaimOcc.numerical -pred, 
+      data            = train_set, 
+      num.trees       = hyper_grid$nTrees[i],
+      mtry            = 2,
+      min.node.size   = 500,
+      sample.fraction = 1,
+      seed            = 123,
+      verbose         = T,
+      probability     = T,
+      splitrule       = "gini",
+      importance      = "impurity"
+      )
+    
+    test_temp  = test_set
+    train_temp = train_set
+    
+    #OOB MSE
+    hyper_grid$OOB_MSE[i] <- model$prediction.error
+    
+    
+    #MODEL TEST MSE
+    test_temp$pred <- predict(model, test_temp)[["predictions"]][,2]
+    test_MSE = sum(((test_temp$pred - test_temp$ClaimOcc.numerical)^2))/nrow(test_temp)
+    hyper_grid$model_MSE.test[i] <- test_MSE
+    
+    #BASELINE TEST MSE
+    base.test_MSE = sum(((test_temp$baseline - test_temp$ClaimOcc.numerical)^2))/nrow(test_temp)
+    hyper_grid$base_MSE.test[i] <- base.test_MSE
+    
+    
+    #MODEL TRAIN MSE
+    train_temp$pred <- predict(model, train_temp)[["predictions"]][,2]
+    train_MSE = sum(((train_temp$pred - train_temp$ClaimOcc.numerical)^2))/nrow(train_temp)
+    hyper_grid$model_MSE.train[i] <- train_MSE
+    
+    #BASELINE TRAIN MSE
+    base.train_MSE = sum(((train_temp$baseline - train_temp$ClaimOcc.numerical)^2))/nrow(train_temp)
+    hyper_grid$base_MSE.train[i] <- base.train_MSE
+    
+    
+    #DIFFERENCE IN MODEL
+    hyper_grid$model.diff[i] <- sqrt((test_MSE - train_MSE)^2)
+
+        
+    #remove(test_temp)
+    #remove(train_temp)
+    remove(base.test_MSE)
+    remove(base.train_MSE)
+    remove(i)
+    remove(test_MSE)
+    remove(train_MSE)
+    
+  })
+
+
+grid.tree_search = hyper_grid #mtry=seq(1,10,1),node_size=seq(750,10,-10),sampe_size=c(1)
+
+remove(hyper_grid)
+remove(test_set)
+remove(train_set)
+remove(trainIndex)
+remove(model)
+
+ggplot(data = grid.tree_search, aes(x=nTrees)) +
+  geom_line(aes(y=model_MSE.test),  size = 1.0, color = "lightblue", linetype = "solid") +
+  geom_line(aes(y=model_MSE.train), size = 1.0, color = "red", linetype = "solid") +
+  labs(y = "MSE", 
+       x = "Number of Trees",
+       title = "Title",
+       subtitle = "Subtitle")
+
+```
+
+```{r Probabilitstic Modelling: Random Forest - Final Model}
+
+model <- ranger(
+      formula         = ClaimOcc ~ . -ClaimNb -ClaimAmount -policyCuts -valueCuts -baseline -ClaimOcc.numerical, 
+      data            = data, 
+      num.trees       = 5000,
+      mtry            = 2,
+      min.node.size   = 500,
+      sample.fraction = 1,
+      seed            = 123,
+      verbose         = T,
+      probability     = T,
+      splitrule       = "gini",
+      importance      = "impurity"
+      )
+
+#CREATE AND APPEND PREDICTIONS TO DATASET
+predictions <- as.data.frame(predict(model, data)[["predictions"]][,2])
+
+colnames(predictions) <- "pred"
+
+data = cbind(data, predictions)
+
+
+#VARIABLE IMPORTANCE STATISTICS AND PLOT
+varImp <- as.data.frame(importance(model))
+varImp <- cbind(rownames(varImp), data.frame(varImp, row.names=NULL))
+colnames(varImp) <- c("variable", "importance")
+
+###THIS IS REQUIRED SO GGPLOT DOESNT PLOT THE VARIABLE ALPHABETICALLY
+varImp$variable <- factor(varImp$variable, levels = impPlot$variable)
+
+
+####VARIABLE IMPORTANCE PLOT
+ggplot(data = varImp) +
+  geom_col(aes(x =  reorder(variable, importance), y = importance), colour = "slateblue1", fill = "slateblue1") +
+  coord_flip() +
+  xlab("variable")
+
+
+#BASELINE MSE
+base.MSE = sum(((data$baseline - data$ClaimOcc.numerical)^2))/nrow(data)
+
+
+#MODEL MSE
+model.MSE = sum(((data$pred - data$ClaimOcc.numerical)^2))/nrow(data)
+
+```
+
+
+
+```{r Variable Predictions Boxplots}
+
+#VehAge
+ggplot(data,aes(VehAge, pred, colour = VehAge)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) +
+  geom_jitter(width=0.25, alpha = 0.1, shape = 1, size = 0.075)
+
+#VehBody
+ggplot(data,aes(VehBody, pred, colour = VehBody)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) +
+  geom_jitter(width=0.25, alpha = 0.1, shape = 1, size = 0.075)
+
+#DrivAge
+ggplot(data,aes(DrivAge, pred, colour = DrivAge)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) +
+  geom_jitter(width=0.25, alpha = 0.1, shape = 1, size = 0.075)
+
+#policyCuts
+ggplot(data,aes(policyCuts, pred, colour = policyCuts)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) +
+  geom_jitter(width=0.25, alpha = 0.1, shape = 1, size = 0.075)
+
+#valueCuts
+ggplot(data,aes(valueCuts, pred, colour = valueCuts)) + 
+  geom_boxplot(outlier.colour = "red", outlier.shape = 0) +
+  geom_jitter(width=0.25, alpha = 0.1, shape = 1, size = 0.075)
+
+
+
+```
+
+
+
+
+
+
